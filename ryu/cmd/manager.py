@@ -69,7 +69,7 @@ def main(args=None, prog=None):
 
     if CONF.enable_debugger:
         LOG = logging.getLogger('ryu.cmd.manager')
-        msg = 'debugging is available (--enable-debugger option is turned on)'
+        msg = '(CUC) debugging is available (--enable-debugger option is turned on)'
         LOG.info(msg)
     else:
         hub.patch(thread=True)
