@@ -1,3 +1,5 @@
+#source: https://osrg.github.io/ryu-book/en/html/rest_qos.html
+
 # Copyright (C) 2011 Nippon Telegraph and Telephone Corporation.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -57,10 +59,10 @@ class SimpleSwitch13(app_manager.RyuApp):
         if buffer_id:
             mod = parser.OFPFlowMod(datapath=datapath, buffer_id=buffer_id,
                                     priority=priority, match=match,
-                                    instructions=inst)
+                                    instructions=inst, table_id=1)
         else:
             mod = parser.OFPFlowMod(datapath=datapath, priority=priority,
-                                    match=match, instructions=inst)
+                                    match=match, instructions=inst, table_id=1)
         datapath.send_msg(mod)
 
     @set_ev_cls(ofp_event.EventOFPPacketIn, MAIN_DISPATCHER)
