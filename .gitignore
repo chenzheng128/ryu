@@ -17,3 +17,5 @@ coverage.xml
 nosetests.xml
 
 .idea/
+
+venv/
