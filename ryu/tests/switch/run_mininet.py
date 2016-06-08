@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# --*-- coding:utf-8 --*--
 
 import sys
 
@@ -32,7 +33,10 @@ if '__main__' == __name__:
 
     net = Mininet(switch=switch, controller=RemoteController)
 
+    #远端交换机 ip=172.0.0.1
     c0 = net.addController('c0', port=OFP_TCP_PORT)
+    #远端交换机 ip=192.168.57.2
+    #c0 = net.addController('c0', port=OFP_TCP_PORT, ip='192.168.57.2')
 
     s1 = net.addSwitch('s1')
     s2 = net.addSwitch('s2')

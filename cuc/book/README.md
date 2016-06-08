@@ -42,7 +42,7 @@ ryu自带代码 `ryu/appsimple_switch_lacp.py`是1.0版本, 这里是1.3版本, 
 这个部分比较重要，清晰之后对OF协议以及Ryu的协议实现会有更好理解。
 台式中文的翻译可能不如直接阅读英文原文。
 
- 每個 OpenFlow（ 版本 X.Y ）都有相對應的常數模組（ ofproto_vX_Y ）和解析模組（ ofproto_vX_Y_parser ）每個 OpenFlow 版本的實作基本上是獨立的。
+ 每個 OpenFlow（ 版本 X.Y ）都有相對應的常數模組（ ofproto_vX_Y ）和解析模組（ ofproto_vX_Y_parser ）每個 OpenFlow 版本的实现基本上是獨立的。
 
  OpenFlow 版本|	常數模块（消息常量）|	解析模块（解析消息）
  ----|-------------------------|--------
@@ -97,7 +97,7 @@ python bin/ryu-manager ryu/app/rest_router.py
 - 設定交換器 s1 的 IP 位址為「172.16.20.1/24」和「172.16.30.30/24」。这里设定的ip在什么位置上呢? 通过ifconfig 没看到对应ip, 因此 ip 被放在控制器内部.
 
 通过dump-flows流表可以可以看到流表3(172.16.20.10)是主机地址, 会直接转发到对应端口, 而流表1,2 上的(172.16.20.1 172.16.30.30)路由ip则被转发至控制器进行处理
- 
+
 ```
 # ovs-ofctl -O OpenFlow13 dump-flows s1
 OFPST_FLOW reply (OF1.3) (xid=0x2):
@@ -116,6 +116,62 @@ OFPST_FLOW reply (OF1.3) (xid=0x2):
 在控制器上 `_packetin_icmp_req()` 函数中实现了网关的 icmp 回应, 其 ping 延时在 2ms (用户态) 左右, 比主机的 0.07ms (内核态) 延时要大的多.
 
 
-例子2加入了 vlan 租户分离, 需要注意的是: 
+例子2加入了 vlan 租户分离, 需要注意的是:
 - 拓扑图一个vlan对应的是一个租户, 每个租户下存在不同路由策略与子网
 - 这里区别与过去的vlan. 过去的一个vlan对应的是一个子网, 而不是一个租户
+
+## 11. 测试
+
+使用下面的指令來執行測試工具。
+```
+$ ryu-manager [--test-switch-target DPID] [--test-switch-tester DPID]
+ [--test-switch-dir DIRECTORY] ryu/tests/switch/tester.py
+```
+
+選項	|說明	|預設值
+-------------------|-----------------------|------------------
+–test-switch-target	| 待測交換器的 datapath ID | 	0000000000000001
+–test-switch-tester	| 輔助交換器的 datapath ID |	0000000000000002
+–test-switch-dir	| 測試樣板的存放路徑	| ryu/tests/switch/of13
+
+原始碼	| 說明
+--------------------------------|----------------
+ryu/tests/switch/tester.py |	測試工具
+ryu/tests/switch/run_mininet.py	| 建立測試環境的腳本
+ryu/tests/switch/of13	| 測試樣板的一些範例
+
+ryu/tests/switch/of13 包含 `action group match meter` 四个目录, 通过这些目录可以更详细学习openflow的协议内容实现
+
+Ryu 原始碼當中利用腳本实现了一個在 mininet 上的測試環境，當中是採用 Open vSwtich 做為待測交換器
+
+首先在mininet vm启动 `run_mininet.py` mininet 拓扑网络 (默认ip使用 127.0.0.1 和book文档保持一致便于命令测试, 不使用我们自定义的192.168.57 ), 然后运行 `tester.py`
+```
+mininet-vm:/opt$ sudo python ryu/ryu/tests/switch/run_mininet.py
+mininet-vm:/opt$ PYTHONPATH=. python ./ryu/bin/ryu-manager --test-switch-dir ryu/ryu/tests/switch/of13 ryu/ryu/tests/switch/tester.py
+```
+
+在交换机 ovs_version: "2.4.0" ( sudo ovs-vsctl show ) 测试结果如下, 522条通过. 
+
+```
+...
+match: 33_IPV6_ND_TLL                    ethernet/vlan/ipv6/icmpv6(data=nd_neighbor(option=nd_option_tla(hw_src='aa:aa:aa:aa:aa:aa')))-->'ipv6_nd_tll=22:22:22:22:22:22,actions=output:2'
+    match: 36_MPLS_BOS                       ethernet/mpls(bsb=0)/mpls(bsb=1)/ipv6/tcp-->'mpls_bos=1,actions=output:2'
+OK(522) / ERROR(469)
+```
+
+
+## 12. 組織架構
+这里可以了解 ryu 的  Application programming model  应用开发模型. 对于一些台语词进行整理
+
+台语 |  中文 | 英语 | 说明
+-------|--|---------------|----------------------------------------
+應用程式 |应用程序|（ Application ） | 應用程式是繼承 ryu.base.app_manager.RyuApp 而來。User logic 被視作是一個應用程式。
+事件 ||（ Event ） | 事件是繼承 ryu.controller.event.EventBase 而來，並藉由 Transmitting 和 receiving event 來相互溝通訊息。
+事件佇列  |事件队列| （ Event queue ） | 每個應用程式都有一個自己的佇列用來接受事件訊息。
+執行緒 |线程| （ Thread ）| Ryu 採用 eventlet 來實現多執行緒。因為執行緒是不可插斷的（ non-preemptive ），因此在使用上要特別注意長時間運行所帶來的風險。
+事件迴圈  |事件循环| （ Event loop ） | 當應用程式執行時，將會有一個執行緒自動被產生用來執行該應用程式。 該執行緒將會做為事件迴圈的模式來執行。如果在事件佇列中發現有事件存在，該事件迴圈將會讀取該事件並且呼叫相對應的事件處理器來處理它。
+額外的執行緒 |额外线程| （ Additional thread ） | 如果需要的話，你可以使用 hub.spawn 產生額外的執行緒用來執行特殊的應用程式功能。
+
+ || eventlet  | 雖然你可以直接使用 eventlet 所提供的所有功能，但不建議你這麼做。 請使用 hub module 所包裝過的功能取代直接使用 eventlet。
+
+事件處理器 || （ Event handler ） | 藉由使用 ryu.controller.handler.set_ev_cls 裝飾器類別來定義自己的事件管理器。當定義的事件發生時，應用程式中的事件迴圈將會偵測到並呼叫對應的事件管理器。
