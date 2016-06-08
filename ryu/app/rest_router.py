@@ -1044,6 +1044,12 @@ class VlanRouter(object):
                                          srcip, extra=self.sw_id)
 
     def _packetin_icmp_req(self, msg, header_list):
+        """
+        网关 icmp 回应实现
+        :param msg:
+        :param header_list:
+        :return:
+        """
         # Send ICMP echo reply.
         in_port = self.ofctl.get_packetin_inport(msg)
         self.ofctl.send_icmp(in_port, header_list, self.vlan_id,

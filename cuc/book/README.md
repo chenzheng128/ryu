@@ -94,8 +94,28 @@ TODO: 这里的防火墙需要在两个方向上作flow管理, 并不支持TCP�
 python bin/ryu-manager ryu/app/rest_router.py
 ```
 例子1容易理解, 是标准的路由器
-- 設定交換器 s1 的 IP 位址為「172.16.20.1/24」和「172.16.30.30/24」。这里设定的ip在什么位置上呢?
+- 設定交換器 s1 的 IP 位址為「172.16.20.1/24」和「172.16.30.30/24」。这里设定的ip在什么位置上呢? 通过ifconfig 没看到对应ip, 因此 ip 被放在控制器内部.
 
-例子2则加入的vlan内容.
-- 在一个vlan对应的是一个租户, 每个租户下存在不同路由策略与子网
+通过dump-flows流表可以可以看到流表3(172.16.20.10)是主机地址, 会直接转发到对应端口, 而流表1,2 上的(172.16.20.1 172.16.30.30)路由ip则被转发至控制器进行处理
+ 
+```
+# ovs-ofctl -O OpenFlow13 dump-flows s1
+OFPST_FLOW reply (OF1.3) (xid=0x2):
+1 cookie=0x1, duration=10913.051s, table=0, n_packets=5, n_bytes=490, priority=1037,ip,nw_dst=172.16.20.1 actions=CONTROLLER:65535
+2 cookie=0x2, duration=10815.451s, table=0, n_packets=0, n_bytes=0, priority=1037,ip,nw_dst=172.16.30.30 actions=CONTROLLER:65535
+3 cookie=0x1, duration=434.775s, table=0, n_packets=121542, n_bytes=8022396, idle_timeout=1800, priority=35,ip,nw_dst=172.16.20.10 actions=dec_ttl,set_field:7a:97:5e:dd:f2:8c->eth_src,set_field:00:00:00:00:00:01->eth_dst,output:1
+ cookie=0x1, duration=10913.051s, table=0, n_packets=0, n_bytes=0, priority=36,ip,nw_src=172.16.20.0/24,nw_dst=172.16.20.0/24 actions=NORMAL
+ cookie=0x2, duration=10815.451s, table=0, n_packets=0, n_bytes=0, priority=36,ip,nw_src=172.16.30.0/24,nw_dst=172.16.30.0/24 actions=NORMAL
+ cookie=0x1, duration=10913.051s, table=0, n_packets=0, n_bytes=0, priority=2,ip,nw_dst=172.16.20.0/24 actions=CONTROLLER:65535
+ cookie=0x2, duration=10815.451s, table=0, n_packets=0, n_bytes=0, priority=2,ip,nw_dst=172.16.30.0/24 actions=CONTROLLER:65535
+ cookie=0x0, duration=10962.886s, table=0, n_packets=213, n_bytes=8946, priority=1,arp actions=CONTROLLER:65535
+ cookie=0x10000, duration=10648.559s, table=0, n_packets=245604, n_bytes=15946198628, priority=1,ip actions=dec_ttl,set_field:12:15:b8:55:4f:64->eth_src,set_field:d6:3a:6f:cd:9f:df->eth_dst,output:2
+ cookie=0x0, duration=10962.886s, table=0, n_packets=0, n_bytes=0, priority=0 actions=NORMAL
+```
+
+在控制器上 `_packetin_icmp_req()` 函数中实现了网关的 icmp 回应, 其 ping 延时在 2ms (用户态) 左右, 比主机的 0.07ms (内核态) 延时要大的多.
+
+
+例子2加入了 vlan 租户分离, 需要注意的是: 
+- 拓扑图一个vlan对应的是一个租户, 每个租户下存在不同路由策略与子网
 - 这里区别与过去的vlan. 过去的一个vlan对应的是一个子网, 而不是一个租户
