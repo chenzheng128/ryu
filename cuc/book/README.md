@@ -22,6 +22,8 @@ curl -X GET http://192.168.57.2:8080/simpleswitch/mactable/0000000000000001
 
 预插入 2条 mac 表后， h1 ping h2 只有一个 arp 产生的 `pack_in (packet in 1 00:00:00:00:00:01 ff:ff:ff:ff:ff:ff 1)`, 而不是 3个 pack_in 消息。
 
+TODO: 结合例子2, 实现REST monitor 查询
+
 ## 4. `simple_switch_lacp_13.py` 網路聚合（ Link Aggregation ）
 
 对应章节代码
@@ -53,3 +55,47 @@ ryu自带代码 `ryu/appsimple_switch_lacp.py`是1.0版本, 这里是1.3版本, 
 以 `icmp_responder.py` 为例，介绍ryu的包封装函数库。 OpenFlow 中 Packet-In 和 Packet-Out 訊息是用來產生封包，可以在當中的欄位放入 Byte 資料並轉換為原始封包的方法。Ryu 提供了相當容易使用的封包產生函式庫給應用程式使用。 具体内容可参考 [API文档][1]
 
 [1]: http://ryu.readthedocs.io/en/latest/ryu_app_api.html
+
+## 8. OF-Config 函式庫
+
+OF-Config 是用來管理 OpenFlow 交換器的一個通訊協定。 OF-Config 通訊協定被定義在 NETCONF（ RFC 6241 ）的標準中，它可以對邏輯交換器的通訊埠（ Port ）和佇列（ Queue ）進行設定以及資料擷取。
+
+```python
+from ryu.lib.of_config.capable_switch import OFCapableSwitch
+#使用 SSH Transport 連線到交換器。 回呼（ callback ）函式 unknown_host_cb 是用來對應未知的 SSH Host Key 時所被執行的函式。 下面的範例中我們使用無條件信任對方並繼續進行連結。
+sess = OFCapableSwitch(
+    host='localhost',
+    port=1830,
+    username='linc',
+    password='linc',
+    unknown_host_cb=lambda host, fingeprint: True)
+#使用 NETCONF GET 來取得交換器的狀態
+csw = sess.get()
+for p in csw.resources.port:
+    print p.resource_id, p.current_rate    
+```
+
+Book 中未提供完整的参考代码。 可参考 `ryu/tests/integrated/test_of_config.py` 测试代码, 以及 `/ryu/cmd/of_config_cli.py` 命令行代码中对类 `OFCapableSwitch`的使用
+
+## 9. 防火牆（ Firewall ）
+源码位于ryu自带库目录 `ryu/app/rest_firewall.py`
+启动命令
+```
+ryu-manager ryu.app.rest_firewall
+```
+
+TODO: 这里的防火墙需要在两个方向上作flow管理, 并不支持TCP会话管理.
+
+## 10. 路由器（ Router ）¶
+
+源码位于ryu自带库目录 `ryu/app/rest_router.py`
+启动命令
+```
+python bin/ryu-manager ryu/app/rest_router.py
+```
+例子1容易理解, 是标准的路由器
+- 設定交換器 s1 的 IP 位址為「172.16.20.1/24」和「172.16.30.30/24」。这里设定的ip在什么位置上呢?
+
+例子2则加入的vlan内容.
+- 在一个vlan对应的是一个租户, 每个租户下存在不同路由策略与子网
+- 这里区别与过去的vlan. 过去的一个vlan对应的是一个子网, 而不是一个租户
