@@ -1,6 +1,8 @@
 # Ryu Book 代码
 
-参考： https://osrg.github.io/ryu-book/zh_tw/html/index.html
+参考：
+- 中文: https://osrg.github.io/ryu-book/zh_tw/html/index.html
+- 英文: https://osrg.github.io/ryu-book/en/html/index.html (比中文增加了QoS内容)
 
 
 ## 1. `simple_switch_13.py` 交換器（ Switching Hub ）
@@ -120,7 +122,10 @@ OFPST_FLOW reply (OF1.3) (xid=0x2):
 - 拓扑图一个vlan对应的是一个租户, 每个租户下存在不同路由策略与子网
 - 这里区别与过去的vlan. 过去的一个vlan对应的是一个子网, 而不是一个租户
 
-## 11. 测试
+## 11. QoS
+ 英文Book才有的内容(晕): https://osrg.github.io/ryu-book/en/html/rest_qos.html
+
+## 12. 测试
 
 使用下面的指令來執行測試工具。
 ```
@@ -150,7 +155,7 @@ mininet-vm:/opt$ sudo python ryu/ryu/tests/switch/run_mininet.py
 mininet-vm:/opt$ PYTHONPATH=. python ./ryu/bin/ryu-manager --test-switch-dir ryu/ryu/tests/switch/of13 ryu/ryu/tests/switch/tester.py
 ```
 
-在交换机 ovs_version: "2.4.0" ( sudo ovs-vsctl show ) 测试结果如下, 522条通过. 
+在交换机 ovs_version: "2.4.0" ( sudo ovs-vsctl show ) 测试结果如下, 522条通过.
 
 ```
 ...
@@ -160,7 +165,7 @@ OK(522) / ERROR(469)
 ```
 
 
-## 12. 組織架構
+## 13. 組織架構
 这里可以了解 ryu 的  Application programming model  应用开发模型. 对于一些台语词进行整理
 
 台语 |  中文 | 英语 | 说明
@@ -175,3 +180,13 @@ OK(522) / ERROR(469)
  || eventlet  | 雖然你可以直接使用 eventlet 所提供的所有功能，但不建議你這麼做。 請使用 hub module 所包裝過的功能取代直接使用 eventlet。
 
 事件處理器 || （ Event handler ） | 藉由使用 ryu.controller.handler.set_ev_cls 裝飾器類別來定義自己的事件管理器。當定義的事件發生時，應用程式中的事件迴圈將會偵測到並呼叫對應的事件管理器。
+
+## 14. 協助專案開發
+注意:
+- 不支持 python 3.0
+- 应符合 符合 PEP8 的規範 http://www.python.org/dev/peps/pep-0008/
+- 单元测试脚本 `cd ryu/;  ./run_tests.sh`
+- 补丁提交与 maillist 交流 `git format-patch origin -s; git send-email 0001-sample.patch`
+
+## 15. 應用案例
+跳过
