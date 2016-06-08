@@ -1,6 +1,16 @@
 CHANGES
 =======
 
+* 增加 11. QoS, 修改 book 目录章节
+* 增加11. 测试 文档
+* 完善 rest_router 文档
+* 增加注释
+* 增加了icmp_responder.py
+* 完成 3. simple_switch_rest_13 实验
+* 增加 simple_monitor 注释
+* book 增加 simple_switch/simple_monitor 代码
+* 增加cuc目录和原始simple switch代码
+* 增加了venv环境， 及其安装运行方法等
 * 增加qos控制器
 * 增加qos switch
 * 增加CUC标记

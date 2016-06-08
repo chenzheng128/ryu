@@ -124,6 +124,7 @@ OFPST_FLOW reply (OF1.3) (xid=0x2):
 
 ## 11. QoS
  英文Book才有的内容(晕): https://osrg.github.io/ryu-book/en/html/rest_qos.html
+ 需要 ovs 库支持 `pip install ovs`
 
 ## 12. 测试
 
