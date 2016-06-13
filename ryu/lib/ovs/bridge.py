@@ -104,6 +104,9 @@ class OVSBridge(object):
     def run_command(self, commands):
         self.vsctl.run_command(commands, self.timeout, self.exception)
 
+        LOG.debug( '\n'.join(str(p) for p in commands))
+        #print "commands: %s" % commands.__str__()
+
     def init(self):
         if self.br_name is None:
             self.br_name = self._get_bridge_name()

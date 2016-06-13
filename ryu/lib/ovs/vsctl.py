@@ -858,6 +858,12 @@ class VSCtlCommand(object):
     def has_option(self, option):
         return option in self.options
 
+    def __str__(self):
+        return "VSCtlCommand: %s %s %s" % (self.command, self. args, self. args)
+
+    def __unicode__(self):
+        return "VSCtlCommand: %s %s %s" % (self.command, self. args, self. args)
+
 
 class VSCtl(object):
 
@@ -1099,7 +1105,10 @@ class VSCtl(object):
         for command in commands:
             funcs = all_commands[command.command]
             command._prerequisite, command._run = funcs
+            #LOG.debug( "%s %s " % (command._prerequisite, command._run))
         self._do_main(commands)
+
+        ##LOG.debug( '\n'.join(str(p) for p in commands))
 
     def run_command(self, commands, timeout_sec=None, exception=None):
         if timeout_sec is None:
