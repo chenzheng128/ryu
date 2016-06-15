@@ -132,6 +132,8 @@ class SimpleSwitchSnort(app_manager.RyuApp):
         actions = [parser.OFPActionOutput(out_port),
                    parser.OFPActionOutput(self.snort_port)]
 
+        self.logger.debug ("out_port: %s" % out_port)
+
         # install a flow to avoid packet_in next time
         if out_port != ofproto.OFPP_FLOOD:
             match = parser.OFPMatch(in_port=in_port, eth_dst=dst)
