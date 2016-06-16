@@ -26,4 +26,5 @@ class L2Switch(app_manager.RyuApp):
             #datapath=dp, buffer_id=msg.buffer_id, in_port=msg.in_port,          # OF1.0 msg.in_port
             datapath=dp, buffer_id=msg.buffer_id, in_port=msg.match['in_port'],  # OF1.3 msg.match
             actions=actions)
+        print "(handle by l2.py) EventOFPPacketIn:", ev
         dp.send_msg(out)  #将 out 消息发送到 dp 上
