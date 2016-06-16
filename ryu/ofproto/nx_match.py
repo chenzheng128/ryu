@@ -16,17 +16,15 @@
 # limitations under the License.
 
 import struct
-import sys
 
 from ryu import exception
 from ryu.lib import mac
-from ryu.lib import type_desc
 from ryu.lib.pack_utils import msg_pack_into
 from ryu.ofproto import ether
 from ryu.ofproto import ofproto_parser
 from ryu.ofproto import ofproto_v1_0
 from ryu.ofproto import inet
-from ryu.ofproto import oxm_fields
+
 
 import logging
 LOG = logging.getLogger('ryu.ofproto.nx_match')
