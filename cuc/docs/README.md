@@ -2,16 +2,19 @@
 
 # 官方文档学习参考
 
-## 简单交换机
+# Writing Your Ryu Application
+
+## The First Application 简单交换机
 Source: http://ryu.readthedocs.io/en/latest/writing_ryu_app.html
 
 `l2.py` 作所有数据的FLOOD操作. 修改为 OF1.3版本
 
 这个交换机很傻(总是FLOOD) , 到 `ryu/app` directory and `integrated tests` directory 可以找到更多资源
 
-## ryu event 事件处理
+## Ryu application API ryu event 事件处理
 Source: http://ryu.readthedocs.io/en/latest/ryu_app_api.html
-学习处理 ryu 的事件机制. 每个app是一个单线程. 通过set_ev_cls 注册相关事件进行处理.  
+
+`l2_events.py` 学习处理 ryu 的事件机制. 每个app是一个单线程. 通过set_ev_cls 注册相关事件进行处理.  
 执行下面的命令可以触发事件EventOFPPortStateChange
 ```
 mininet> s1 ifconfig s1-eth2 up
@@ -26,6 +29,17 @@ mininet> s1 ifconfig s1-eth2 up
 # 执行命令触发以下事件与处理 mininet> s1 ifconfig s1-eth2 up
 (handle by l2_events.py) EventOFPPortStateChange: <ryu.controller.ofp_event.EventOFPPortStateChange object at 0x10e16fdd0>
 ```
+
+## Packet library
+Source: http://ryu.readthedocs.io/en/latest/library_packet.html
+
+`l2_lib_packet.py` 打印数据包结构, build 数据包, tcp包
+
+## BGP speaker library
+使用 `eventlet.monkey_patch()` 绿色线程打猴子补丁. 参考: Python——eventlet http://www.cnblogs.com/Security-Darren/p/4170031.html
+
+## OVSDB Manager library
+`ovsdb.py` 这个代码没有运行通过, 不是一个正确运行的代码
 
 
 ## 拓扑查看器
