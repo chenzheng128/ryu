@@ -46,7 +46,7 @@ process_option() {
 venv=.venv
 with_venv=tools/with_venv.sh
 always_venv=0
-never_venv=0
+never_venv=1 # 不需要venv环境
 just_pep8=0
 no_pep8=0
 just_pylint=0
@@ -108,7 +108,7 @@ run_pep8() {
   echo "Running pep8 ..."
 
   PEP8_OPTIONS="--repeat --show-source"
-  PEP8_INCLUDE="ryu setup*.py"
+  PEP8_INCLUDE="docs" # pep8的检查目录
   PEP8_LOG=pep8.log
   ${wrapper} pep8 $PEP8_OPTIONS $PEP8_INCLUDE | tee $PEP8_LOG
 }
@@ -120,7 +120,7 @@ run_integrated() {
   sudo PYTHONPATH=. nosetests -s $INTEGRATED_TEST_RUNNER 
 }
 #NOSETESTS="nosetests $noseopts $noseargs"
-NOSETESTS="${PYTHON} ./ryu/tests/run_tests.py $noseopts $noseargs"
+NOSETESTS="${PYTHON} ./cuc/tests/run_tests_cuc.py $noseopts $noseargs"
 
 #if [ -n "$PLUGIN_DIR" ]
 #then
