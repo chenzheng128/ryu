@@ -108,7 +108,7 @@ run_pep8() {
   echo "Running pep8 ..."
 
   PEP8_OPTIONS="--repeat --show-source"
-  PEP8_INCLUDE="docs" # pep8的检查目录
+  PEP8_INCLUDE="cuc/docs" # pep8的检查目录
   PEP8_LOG=pep8.log
   ${wrapper} pep8 $PEP8_OPTIONS $PEP8_INCLUDE | tee $PEP8_LOG
 }
