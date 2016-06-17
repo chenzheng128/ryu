@@ -92,6 +92,7 @@ class Test_Datapath(unittest.TestCase):
             "4-14-ofp_echo_reply.packet",
         ]
         this_dir = os.path.dirname(sys.modules[__name__].__file__)
+        this_dir = os.path.join(this_dir , "../../../../ryu/tests/unit/controller")
         packet_data_dir = os.path.join(this_dir, '../../packet_data/of13')
         json_dir = os.path.join(this_dir, '../ofproto/json/of13')
 
