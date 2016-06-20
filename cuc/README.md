@@ -9,12 +9,33 @@ CUC代码目录
 
 ## unit 单元测试
 
-运行 nose unittest 代码 
+运行 nose unittest shell 代码 
 ``` 
 PYTHONPATH=. ./cuc/run_tests_cuc.sh 
 ``` 
 
 (TODO: mock nose 进一步学习)
+
+执行特定目录 `sample`  `app` 的单元测试
+```
+cd ryu/ryu/tests/unit
+nosetests -v sample app  
+
+----------------------------------------------------------------------
+Ran 179 tests in 0.760s
+
+FAILED (errors=1) # 一个测试不通过 (在 pycharm 中可用  #eq_("a", os.getcwd(), os.getcwd()) 打印当前目录等信息) 
+```
+
+执行特定文件 `app/test_ofctl_rest.py` 的单元测试
+```
+nosetests -v app/test_ofctl_rest.py
+
+----------------------------------------------------------------------
+Ran 168 tests in 0.777s
+
+OK # 所有测试通过
+```
 
 ## switch 交换机测试
 
