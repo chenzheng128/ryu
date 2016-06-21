@@ -410,6 +410,10 @@ class Test_tester(unittest.TestCase):
         pass
 
     def test__normalize_test_json(self):
+
+        print os.getcwd()
+        #eq_("a", os.getcwd(), os.getcwd())
+
         self.tests = TestPatterns(
             "../switch/of13/action/00_OUTPUT.json",
             logging.getLogger("test_tester"))
