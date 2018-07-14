@@ -17,13 +17,15 @@
 BGP Monitoring Protocol draft-ietf-grow-bmp-07
 """
 
-import six
 import struct
 
+import six
+
+from ryu.lib import addrconv
 from ryu.lib.packet import packet_base
 from ryu.lib.packet import stream_parser
 from ryu.lib.packet.bgp import BGPMessage
-from ryu.lib import addrconv
+from ryu.lib.type_desc import TypeDisp
 
 VERSION = 3
 
@@ -66,45 +68,8 @@ BMP_PEER_DOWN_REASON_REMOTE_BGP_NOTIFICATION = 3
 BMP_PEER_DOWN_REASON_REMOTE_NO_NOTIFICATION = 4
 
 
-class _TypeDisp(object):
-    _TYPES = {}
-    _REV_TYPES = None
-    _UNKNOWN_TYPE = None
-
-    @classmethod
-    def register_unknown_type(cls):
-        def _register_type(subcls):
-            cls._UNKNOWN_TYPE = subcls
-            return subcls
-        return _register_type
-
-    @classmethod
-    def register_type(cls, type_):
-        cls._TYPES = cls._TYPES.copy()
-
-        def _register_type(subcls):
-            cls._TYPES[type_] = subcls
-            cls._REV_TYPES = None
-            return subcls
-        return _register_type
-
-    @classmethod
-    def _lookup_type(cls, type_):
-        try:
-            return cls._TYPES[type_]
-        except KeyError:
-            return cls._UNKNOWN_TYPE
-
-    @classmethod
-    def _rev_lookup_type(cls, targ_cls):
-        if cls._REV_TYPES is None:
-            rev = dict((v, k) for k, v in cls._TYPES.items())
-            cls._REV_TYPES = rev
-        return cls._REV_TYPES[targ_cls]
-
-
-class BMPMessage(packet_base.PacketBase, _TypeDisp):
-    """Base class for BGP Monitoring Protocol messages.
+class BMPMessage(packet_base.PacketBase, TypeDisp):
+    r"""Base class for BGP Monitoring Protocol messages.
 
     An instance has the following attributes at least.
     Most of them are same to the on-wire counterparts but in host byte
@@ -176,7 +141,7 @@ class BMPMessage(packet_base.PacketBase, _TypeDisp):
 
 
 class BMPPeerMessage(BMPMessage):
-    """BMP Message with Per Peer Header
+    r"""BMP Message with Per Peer Header
 
     Following BMP Messages contain Per Peer Header after Common BMP Header.
 
@@ -243,7 +208,7 @@ class BMPPeerMessage(BMPMessage):
         if peer_flags & (1 << 7):
             peer_address = addrconv.ipv6.bin_to_text(peer_address)
         else:
-            peer_address = addrconv.ipv4.bin_to_text(peer_address[:4])
+            peer_address = addrconv.ipv4.bin_to_text(peer_address[-4:])
 
         peer_bgp_id = addrconv.ipv4.bin_to_text(peer_bgp_id)
 
@@ -269,7 +234,8 @@ class BMPPeerMessage(BMPMessage):
             flags |= (1 << 7)
             peer_address = addrconv.ipv6.text_to_bin(self.peer_address)
         else:
-            peer_address = addrconv.ipv4.text_to_bin(self.peer_address)
+            peer_address = struct.pack(
+                '!12x4s', addrconv.ipv4.text_to_bin(self.peer_address))
 
         peer_bgp_id = addrconv.ipv4.text_to_bin(self.peer_bgp_id)
 
@@ -284,7 +250,7 @@ class BMPPeerMessage(BMPMessage):
 
 @BMPMessage.register_type(BMP_MSG_ROUTE_MONITORING)
 class BMPRouteMonitoring(BMPPeerMessage):
-    """BMP Route Monitoring Message
+    r"""BMP Route Monitoring Message
 
     ========================== ===============================================
     Attribute                  Description
@@ -327,7 +293,7 @@ class BMPRouteMonitoring(BMPPeerMessage):
     def parser(cls, buf):
         kwargs, buf = super(BMPRouteMonitoring, cls).parser(buf)
 
-        bgp_update, buf = BGPMessage.parser(buf)
+        bgp_update, _, buf = BGPMessage.parser(buf)
 
         kwargs['bgp_update'] = bgp_update
 
@@ -342,7 +308,7 @@ class BMPRouteMonitoring(BMPPeerMessage):
 
 @BMPMessage.register_type(BMP_MSG_STATISTICS_REPORT)
 class BMPStatisticsReport(BMPPeerMessage):
-    """BMP Statistics Report Message
+    r"""BMP Statistics Report Message
 
     ========================== ===============================================
     Attribute                  Description
@@ -458,7 +424,7 @@ class BMPStatisticsReport(BMPPeerMessage):
 
 @BMPMessage.register_type(BMP_MSG_PEER_DOWN_NOTIFICATION)
 class BMPPeerDownNotification(BMPPeerMessage):
-    """BMP Peer Down Notification Message
+    r"""BMP Peer Down Notification Message
 
     ========================== ===============================================
     Attribute                  Description
@@ -498,11 +464,11 @@ class BMPPeerDownNotification(BMPPeerMessage):
         buf = buf[struct.calcsize('!B'):]
 
         if reason == BMP_PEER_DOWN_REASON_LOCAL_BGP_NOTIFICATION:
-            data, rest = BGPMessage.parser(buf)
+            data, _, rest = BGPMessage.parser(buf)
         elif reason == BMP_PEER_DOWN_REASON_LOCAL_NO_NOTIFICATION:
             data = struct.unpack_from('!H', six.binary_type(buf))
         elif reason == BMP_PEER_DOWN_REASON_REMOTE_BGP_NOTIFICATION:
-            data, rest = BGPMessage.parser(buf)
+            data, _, rest = BGPMessage.parser(buf)
         elif reason == BMP_PEER_DOWN_REASON_REMOTE_NO_NOTIFICATION:
             data = None
         else:
@@ -532,7 +498,7 @@ class BMPPeerDownNotification(BMPPeerMessage):
 
 @BMPMessage.register_type(BMP_MSG_PEER_UP_NOTIFICATION)
 class BMPPeerUpNotification(BMPPeerMessage):
-    """BMP Peer Up Notification Message
+    r"""BMP Peer Up Notification Message
 
     ========================== ===============================================
     Attribute                  Description
@@ -597,7 +563,7 @@ class BMPPeerUpNotification(BMPPeerMessage):
          remote_port) = struct.unpack_from(cls._PACK_STR, six.binary_type(rest))
 
         if '.' in kwargs['peer_address']:
-            local_address = addrconv.ipv4.bin_to_text(local_address[:4])
+            local_address = addrconv.ipv4.bin_to_text(local_address[-4:])
         elif ':' in kwargs['peer_address']:
             local_address = addrconv.ipv6.bin_to_text(local_address)
         else:
@@ -609,8 +575,8 @@ class BMPPeerUpNotification(BMPPeerMessage):
 
         rest = rest[cls._MIN_LEN:]
 
-        sent_open_msg, rest = BGPMessage.parser(rest)
-        received_open_msg, rest = BGPMessage.parser(rest)
+        sent_open_msg, _, rest = BGPMessage.parser(rest)
+        received_open_msg, _, rest = BGPMessage.parser(rest)
 
         kwargs['sent_open_message'] = sent_open_msg
         kwargs['received_open_message'] = received_open_msg
@@ -621,7 +587,8 @@ class BMPPeerUpNotification(BMPPeerMessage):
         msg = super(BMPPeerUpNotification, self).serialize_tail()
 
         if '.' in self.local_address:
-            local_address = addrconv.ipv4.text_to_bin(self.local_address)
+            local_address = struct.pack(
+                '!12x4s', addrconv.ipv4.text_to_bin(self.local_address))
         elif ':' in self.local_address:
             local_address = addrconv.ipv6.text_to_bin(self.local_address)
         else:
@@ -638,7 +605,7 @@ class BMPPeerUpNotification(BMPPeerMessage):
 
 @BMPMessage.register_type(BMP_MSG_INITIATION)
 class BMPInitiation(BMPMessage):
-    """BMP Initiation Message
+    r"""BMP Initiation Message
 
     ========================== ===============================================
     Attribute                  Description
@@ -702,7 +669,7 @@ class BMPInitiation(BMPMessage):
 
 @BMPMessage.register_type(BMP_MSG_TERMINATION)
 class BMPTermination(BMPMessage):
-    """BMP Termination Message
+    r"""BMP Termination Message
 
     ========================== ===============================================
     Attribute                  Description

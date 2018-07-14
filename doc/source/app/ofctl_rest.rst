@@ -248,7 +248,16 @@ Get flows stats filtered by fields
         cookie       Require matching entries to contain this cookie value (int)        1               0
         cookie_mask  Mask used to restrict the cookie bits that must match (int)        1               0
         match        Fields to match (dict)                                             {"in_port": 1}  {} #wildcarded
+        priority     Priority of the entry (int) (See Note)                             11111           #wildcarded
         ============ ================================================================== =============== ===============
+
+        .. NOTE::
+
+           OpenFlow Spec does not allow to filter flow entries by priority,
+           but when with a large amount of flow entries, filtering by priority
+           is convenient to get statistics efficiently.
+           So, this app provides priority field for filtering.
+
 
     Response message body:
         The same as :ref:`get-all-flows-stats`
@@ -1785,6 +1794,72 @@ Get meter features stats
         }
 
 
+Get role
+--------
+
+    Get the current role of the controller from the switch.
+
+    Usage:
+
+        ======= =========================
+        Method  GET
+        URI     /stats/role/<dpid>
+        ======= =========================
+
+    Response message body(Openflow1.4 or earlier):
+
+        ============= ============================= =========
+        Attribute     Description                   Example
+        ============= ============================= =========
+        dpid          Datapath ID                   1
+        role          One of OFPCR_ROLE_*           "EQUAL"
+        generation_id Master Election Generation Id 0
+        ============= ============================= =========
+
+    Response message body(Openflow1.5 or later):
+
+        ============= ============================= =========
+        Attribute     Description                   Example
+        ============= ============================= =========
+        dpid          Datapath ID                   1
+        role          One of OFPCR_ROLE_*           "EQUAL"
+        short_id      ID number for the controller  0
+        generation_id Master Election Generation Id 0
+        ============= ============================= =========
+
+    Example of use::
+
+        $ curl -X GET http://localhost:8080/stats/role/1
+
+    Response (Openflow1.4 or earlier):
+
+    .. code-block:: javascript
+
+        {
+            "1": [
+                {
+                    "generation_id": 0,
+                    "role": "EQUAL"
+                }
+            ]
+        }
+
+
+    Response (Openflow1.5 or later):
+
+    .. code-block:: javascript
+
+        {
+            "1": [
+                {
+                    "generation_id": 0,
+                    "role": "EQUAL",
+                    "short_id": 0
+                }
+            ]
+        }
+
+
 Update the switch stats
 =======================
 
@@ -2512,6 +2587,33 @@ Delete a meter entry
             "meter_id": 1
          }' http://localhost:8080/stats/meterentry/delete
 
+Modify role
+--------------------
+
+    modify the role of the switch.
+
+    Usage:
+
+        ======= =========================
+        Method  POST
+        URI     /stats/role
+        ======= =========================
+
+    Request message body:
+
+        =========== ============================ ========= =================
+        Attribute   Description                  Example   Default
+        =========== ============================ ========= =================
+        dpid        Datapath ID (int)            1         (Mandatory)
+        role        One of OFPCR_ROLE_*(string)  "MASTER"  OFPCR_ROLE_EQUAL
+        =========== ============================ ========= =================
+
+    Example of use::
+
+        $ curl -X POST -d '{
+            "dpid": 1,
+            "role": "MASTER"
+         }' http://localhost:8080/stats/role
 
 Support for experimenter multipart
 ==================================

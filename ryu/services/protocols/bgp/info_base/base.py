@@ -25,6 +25,7 @@ from copy import copy
 import logging
 import functools
 import netaddr
+import six
 
 from ryu.lib.packet.bgp import RF_IPv4_UC
 from ryu.lib.packet.bgp import RouteTargetMembershipNLRI
@@ -43,6 +44,7 @@ from ryu.services.protocols.bgp.processor import BPR_UNKNOWN
 LOG = logging.getLogger('bgpspeaker.info_base.base')
 
 
+@six.add_metaclass(ABCMeta)
 class Table(object):
     """A container for holding information about destination/prefixes.
 
@@ -50,7 +52,6 @@ class Table(object):
     This is a base class which should be sub-classed for different route
     family. A table can be uniquely identified by (Route Family, Scope Id).
     """
-    __metaclass__ = abc.ABCMeta
     ROUTE_FAMILY = RF_IPv4_UC
 
     def __init__(self, scope_id, core_service, signal_bus):
@@ -82,9 +83,6 @@ class Table(object):
         raise NotImplementedError()
 
     def values(self):
-        return self._destinations.values()
-
-    def itervalues(self):
         return iter(self._destinations.values())
 
     def insert(self, path):
@@ -152,7 +150,7 @@ class Table(object):
         uninteresting_dest_count = 0
         for dest in self.values():
             added_withdraw = \
-                dest.withdraw_unintresting_paths(interested_rts)
+                dest.withdraw_uninteresting_paths(interested_rts)
             if added_withdraw:
                 self._signal_bus.dest_changed(dest)
                 uninteresting_dest_count += 1
@@ -226,6 +224,10 @@ class NonVrfPathProcessingMixin(object):
     because they are processed at VRF level, so different logic applies.
     """
 
+    def __init__(self):
+        self._core_service = None  # not assigned yet
+        self._known_path_list = []
+
     def _best_path_lost(self):
         self._best_path = None
 
@@ -274,6 +276,7 @@ class NonVrfPathProcessingMixin(object):
                 self._sent_routes = {}
 
 
+@six.add_metaclass(ABCMeta)
 class Destination(object):
     """State about a particular destination.
 
@@ -281,7 +284,6 @@ class Destination(object):
     a routing information base table *Table*.
     """
 
-    __metaclass__ = abc.ABCMeta
     ROUTE_FAMILY = RF_IPv4_UC
 
     def __init__(self, table, nlri):
@@ -333,6 +335,10 @@ class Destination(object):
     @property
     def nlri(self):
         return self._nlri
+
+    @property
+    def nlri_str(self):
+        return self._nlri.formatted_nlri_str
 
     @property
     def best_path(self):
@@ -611,7 +617,7 @@ class Destination(object):
 
         return current_best_path, best_path_reason
 
-    def withdraw_unintresting_paths(self, interested_rts):
+    def withdraw_uninteresting_paths(self, interested_rts):
         """Withdraws paths that are no longer interesting.
 
         For all known paths that do not have any route target in common with
@@ -663,14 +669,32 @@ class Destination(object):
 
         return result
 
+    def __lt__(self, other):
+        return str(self) < str(other)
 
+    def __le__(self, other):
+        return str(self) <= str(other)
+
+    def __eq__(self, other):
+        return str(self) == str(other)
+
+    def __ne__(self, other):
+        return str(self) != str(other)
+
+    def __gt__(self, other):
+        return str(self) > str(other)
+
+    def __ge__(self, other):
+        return str(self) >= str(other)
+
+
+@six.add_metaclass(ABCMeta)
 class Path(object):
     """Represents a way of reaching an IP destination.
 
     Also contains other meta-data given to us by a specific source (such as a
     peer).
     """
-    __metaclass__ = ABCMeta
     __slots__ = ('_source', '_path_attr_map', '_nlri', '_source_version_num',
                  '_exported_from', '_nexthop', 'next_path', 'prev_path',
                  '_is_withdraw', 'med_set_by_target_neighbor')
@@ -758,6 +782,10 @@ class Path(object):
         return self._nlri
 
     @property
+    def nlri_str(self):
+        return self._nlri.formatted_nlri_str
+
+    @property
     def is_withdraw(self):
         return self._is_withdraw
 
@@ -815,8 +843,7 @@ class Path(object):
         return self._source is None
 
     def has_nexthop(self):
-        return not (not self._nexthop or self._nexthop == '0.0.0.0' or
-                    self._nexthop == '::')
+        return self._nexthop and self._nexthop not in ('0.0.0.0', '::')
 
     def __str__(self):
         return (
@@ -834,6 +861,7 @@ class Path(object):
             self._path_attr_map, self._nexthop, self._is_withdraw))
 
 
+@six.add_metaclass(ABCMeta)
 class Filter(object):
     """Represents a general filter for in-bound and out-bound filter
 
@@ -842,9 +870,7 @@ class Filter(object):
     ================ ==================================================
     policy           Filter.POLICY_PERMIT or Filter.POLICY_DENY
     ================ ==================================================
-
     """
-    __metaclass__ = ABCMeta
 
     ROUTE_FAMILY = RF_IPv4_UC
 
@@ -868,7 +894,6 @@ class Filter(object):
         this method returns True as the matching result.
 
         ``path`` specifies the path. prefix must be string.
-
         """
         raise NotImplementedError()
 
@@ -877,7 +902,6 @@ class Filter(object):
         """ This method clones Filter object.
 
         Returns Filter object that has the same values with the original one.
-
         """
         raise NotImplementedError()
 
@@ -885,33 +909,34 @@ class Filter(object):
 @functools.total_ordering
 class PrefixFilter(Filter):
     """
-    used to specify a prefix for filter.
+    Used to specify a prefix for filter.
 
-    We can create PrefixFilter object as follows.
+    We can create PrefixFilter object as follows::
 
-    prefix_filter = PrefixFilter('10.5.111.0/24',
-                                 policy=PrefixFilter.POLICY_PERMIT)
+        prefix_filter = PrefixFilter('10.5.111.0/24',
+                                     policy=PrefixFilter.POLICY_PERMIT)
 
     ================ ==================================================
     Attribute        Description
     ================ ==================================================
     prefix           A prefix used for this filter
-    policy           PrefixFilter.POLICY.PERMIT or PrefixFilter.POLICY_DENY
+    policy           One of the following values.
+
+                     | PrefixFilter.POLICY.PERMIT
+                     | PrefixFilter.POLICY_DENY
     ge               Prefix length that will be applied to this filter.
                      ge means greater than or equal.
     le               Prefix length that will be applied to this filter.
                      le means less than or equal.
     ================ ==================================================
 
+    For example, when PrefixFilter object is created as follows::
 
-    For example, when PrefixFilter object is created as follows:
+        p = PrefixFilter('10.5.111.0/24',
+                         policy=PrefixFilter.POLICY_DENY,
+                         ge=26, le=28)
 
-    * p = PrefixFilter('10.5.111.0/24',
-                       policy=PrefixFilter.POLICY_DENY,
-                       ge=26, le=28)
-
-
-    prefixes which match 10.5.111.0/24 and its length matches
+    Prefixes which match 10.5.111.0/24 and its length matches
     from 26 to 28 will be filtered.
     When this filter is used as an out-filter, it will stop sending
     the path to neighbor because of POLICY_DENY.
@@ -922,12 +947,11 @@ class PrefixFilter(Filter):
 
     If you don't want to send prefixes 10.5.111.64/26 and 10.5.111.32/27
     and 10.5.111.16/28, and allow to send other 10.5.111.0's prefixes,
-    you can do it by specifying as follows;
+    you can do it by specifying as follows::
 
-    * p = PrefixFilter('10.5.111.0/24',
-                       policy=PrefixFilter.POLICY_DENY,
-                       ge=26, le=28).
-
+        p = PrefixFilter('10.5.111.0/24',
+                         policy=PrefixFilter.POLICY_DENY,
+                         ge=26, le=28).
     """
 
     def __init__(self, prefix, policy, ge=None, le=None):
@@ -975,7 +999,6 @@ class PrefixFilter(Filter):
         this method returns True as the matching result.
 
         ``path`` specifies the path that has prefix.
-
         """
         nlri = path.nlri
 
@@ -1006,7 +1029,6 @@ class PrefixFilter(Filter):
 
         Returns PrefixFilter object that has the same values with the
         original one.
-
         """
 
         return self.__class__(self.prefix,
@@ -1018,39 +1040,37 @@ class PrefixFilter(Filter):
 @functools.total_ordering
 class ASPathFilter(Filter):
     """
-    used to specify a prefix for AS_PATH attribute.
+    Used to specify a prefix for AS_PATH attribute.
 
-    We can create ASPathFilter object as follows;
+    We can create ASPathFilter object as follows::
 
-    * as_path_filter = ASPathFilter(65000,policy=ASPathFilter.TOP)
+        as_path_filter = ASPathFilter(65000,policy=ASPathFilter.TOP)
 
     ================ ==================================================
     Attribute        Description
     ================ ==================================================
     as_number        A AS number used for this filter
-    policy           ASPathFilter.POLICY_TOP and ASPathFilter.POLICY_END,
-                     ASPathFilter.POLICY_INCLUDE and
-                     ASPathFilter.POLICY_NOT_INCLUDE are available.
+    policy           One of the following values.
+
+                     | ASPathFilter.POLICY_TOP
+                     | ASPathFilter.POLICY_END
+                     | ASPathFilter.POLICY_INCLUDE
+                     | ASPathFilter.POLICY_NOT_INCLUDE
     ================ ==================================================
 
-    Meaning of each policy is as follows;
+    Meaning of each policy is as follows:
 
-    * POLICY_TOP :
-        Filter checks if the specified AS number is at the top of
-        AS_PATH attribute.
-
-    * POLICY_END :
-        Filter checks is the specified AS number
-        is at the last of AS_PATH attribute.
-
-    * POLICY_INCLUDE :
-        Filter checks if specified AS number
-        exists in AS_PATH attribute
-
-    * POLICY_NOT_INCLUDE :
-        opposite to POLICY_INCLUDE
-
-
+    ================== ==================================================
+    Policy             Description
+    ================== ==================================================
+    POLICY_TOP         Filter checks if the specified AS number
+                       is at the top of AS_PATH attribute.
+    POLICY_END         Filter checks is the specified AS number
+                       is at the last of AS_PATH attribute.
+    POLICY_INCLUDE     Filter checks if specified AS number exists
+                       in AS_PATH attribute.
+    POLICY_NOT_INCLUDE Opposite to POLICY_INCLUDE.
+    ================== ==================================================
     """
 
     POLICY_TOP = 2
@@ -1097,7 +1117,6 @@ class ASPathFilter(Filter):
         this method returns True as the matching result.
 
         ``path`` specifies the path.
-
         """
 
         path_aspath = path.pathattr_map.get(BGP_ATTR_TYPE_AS_PATH)
@@ -1138,7 +1157,6 @@ class ASPathFilter(Filter):
 
         Returns ASPathFilter object that has the same values with the
         original one.
-
         """
 
         return self.__class__(self._as_number,
@@ -1149,15 +1167,15 @@ class AttributeMap(object):
     """
     This class is used to specify an attribute to add if the path matches
     filters.
-    We can create AttributeMap object as follows;
+    We can create AttributeMap object as follows::
 
-      pref_filter = PrefixFilter('192.168.103.0/30',
-                                 PrefixFilter.POLICY_PERMIT)
+        pref_filter = PrefixFilter('192.168.103.0/30',
+                                   PrefixFilter.POLICY_PERMIT)
 
-      attribute_map = AttributeMap([pref_filter],
-                    AttributeMap.ATTR_LOCAL_PREF, 250)
+        attribute_map = AttributeMap([pref_filter],
+                                     AttributeMap.ATTR_LOCAL_PREF, 250)
 
-      speaker.attribute_map_set('192.168.50.102', [attribute_map])
+        speaker.attribute_map_set('192.168.50.102', [attribute_map])
 
     AttributeMap.ATTR_LOCAL_PREF means that 250 is set as a
     local preference value if nlri in the path matches pref_filter.
@@ -1174,7 +1192,6 @@ class AttributeMap(object):
                         AttributeMap.ATTR_LOCAL_PREF is available.
     attr_value          A attribute value
     =================== ==================================================
-
     """
 
     ATTR_LOCAL_PREF = '_local_pref'
@@ -1195,7 +1212,6 @@ class AttributeMap(object):
         that this object contains.
 
         ``path`` specifies the path.
-
         """
         result = False
         cause = None
@@ -1221,7 +1237,6 @@ class AttributeMap(object):
 
         Returns AttributeMap object that has the same values with the
         original one.
-
         """
 
         cloned_filters = [f.clone() for f in self.filters]

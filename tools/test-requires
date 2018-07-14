@@ -1,9 +1,7 @@
+autopep8
 coverage
 mock
 nose
-pep8
-pylint==0.25.0
+pycodestyle
+pylint
 formencode
-lxml; platform_python_implementation != 'PyPy'  # OF-Config
-lxml==3.4.0; platform_python_implementation == 'PyPy'
-paramiko  # NETCONF, BGP speaker

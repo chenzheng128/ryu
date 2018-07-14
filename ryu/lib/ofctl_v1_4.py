@@ -25,6 +25,7 @@ LOG = logging.getLogger(__name__)
 DEFAULT_TIMEOUT = 1.0
 
 UTIL = ofctl_utils.OFCtlUtil(ofproto_v1_4)
+str_to_int = ofctl_utils.str_to_int
 
 
 def to_action(dp, dic):
@@ -68,18 +69,18 @@ def to_instructions(dp, insts):
             instructions.append(
                 parser.OFPInstructionActions(ofp.OFPIT_CLEAR_ACTIONS, []))
         elif inst_type == 'GOTO_TABLE':
-            table_id = int(i.get('table_id'))
+            table_id = str_to_int(i.get('table_id'))
             instructions.append(parser.OFPInstructionGotoTable(table_id))
         elif inst_type == 'WRITE_METADATA':
-            metadata = ofctl_utils.str_to_int(i.get('metadata'))
-            metadata_mask = (ofctl_utils.str_to_int(i['metadata_mask'])
+            metadata = str_to_int(i.get('metadata'))
+            metadata_mask = (str_to_int(i['metadata_mask'])
                              if 'metadata_mask' in i
                              else parser.UINT64_MAX)
             instructions.append(
                 parser.OFPInstructionWriteMetadata(
                     metadata, metadata_mask))
         elif inst_type == 'METER':
-            meter_id = int(i.get('meter_id'))
+            meter_id = str_to_int(i.get('meter_id'))
             instructions.append(parser.OFPInstructionMeter(meter_id))
         else:
             LOG.error('Unknown instruction type: %s', inst_type)
@@ -127,47 +128,46 @@ def instructions_to_str(instructions):
 
 def to_match(dp, attrs):
     convert = {'in_port': UTIL.ofp_port_from_user,
-               'in_phy_port': int,
+               'in_phy_port': str_to_int,
                'metadata': ofctl_utils.to_match_masked_int,
                'eth_dst': ofctl_utils.to_match_eth,
                'eth_src': ofctl_utils.to_match_eth,
-               'eth_type': int,
+               'eth_type': str_to_int,
                'vlan_vid': to_match_vid,
-               'vlan_pcp': int,
-               'ip_dscp': int,
-               'ip_ecn': int,
-               'ip_proto': int,
+               'vlan_pcp': str_to_int,
+               'ip_dscp': str_to_int,
+               'ip_ecn': str_to_int,
+               'ip_proto': str_to_int,
                'ipv4_src': ofctl_utils.to_match_ip,
                'ipv4_dst': ofctl_utils.to_match_ip,
-               'tcp_src': int,
-               'tcp_dst': int,
-               'udp_src': int,
-               'udp_dst': int,
-               'sctp_src': int,
-               'sctp_dst': int,
-               'icmpv4_type': int,
-               'icmpv4_code': int,
-               'arp_op': int,
+               'tcp_src': str_to_int,
+               'tcp_dst': str_to_int,
+               'udp_src': str_to_int,
+               'udp_dst': str_to_int,
+               'sctp_src': str_to_int,
+               'sctp_dst': str_to_int,
+               'icmpv4_type': str_to_int,
+               'icmpv4_code': str_to_int,
+               'arp_op': str_to_int,
                'arp_spa': ofctl_utils.to_match_ip,
                'arp_tpa': ofctl_utils.to_match_ip,
                'arp_sha': ofctl_utils.to_match_eth,
                'arp_tha': ofctl_utils.to_match_eth,
                'ipv6_src': ofctl_utils.to_match_ip,
                'ipv6_dst': ofctl_utils.to_match_ip,
-               'ipv6_flabel': int,
-               'icmpv6_type': int,
-               'icmpv6_code': int,
+               'ipv6_flabel': str_to_int,
+               'icmpv6_type': str_to_int,
+               'icmpv6_code': str_to_int,
                'ipv6_nd_target': ofctl_utils.to_match_ip,
                'ipv6_nd_sll': ofctl_utils.to_match_eth,
                'ipv6_nd_tll': ofctl_utils.to_match_eth,
-               'mpls_label': int,
-               'mpls_tc': int,
-               'mpls_bos': int,
+               'mpls_label': str_to_int,
+               'mpls_tc': str_to_int,
+               'mpls_bos': str_to_int,
                'pbb_isid': ofctl_utils.to_match_masked_int,
                'tunnel_id': ofctl_utils.to_match_masked_int,
                'ipv6_exthdr': ofctl_utils.to_match_masked_int,
-               'pbb_uca': int,
-               }
+               'pbb_uca': str_to_int}
 
     keys = {'dl_dst': 'eth_dst',
             'dl_src': 'eth_src',
@@ -214,8 +214,7 @@ def match_to_str(ofmatch):
         mask = match_field['OXMTlv']['mask']
         value = match_field['OXMTlv']['value']
         if key == 'vlan_vid':
-            value = ofctl_utils.match_vid_to_str(value, mask,
-                                                 ofproto_v1_4.OFPVID_PRESENT)
+            value = match_vid_to_str(value, mask)
         elif key == 'in_port':
             value = UTIL.ofp_port_to_user(value)
         else:
@@ -224,6 +223,11 @@ def match_to_str(ofmatch):
         match.setdefault(key, value)
 
     return match
+
+
+def match_vid_to_str(value, mask):
+    return ofctl_utils.match_vid_to_str(
+        value, mask, ofproto_v1_4.OFPVID_PRESENT)
 
 
 def wrap_dpid_dict(dp, value, to_user=True):
@@ -315,14 +319,17 @@ def get_flow_stats(dp, waiters, flow=None, to_user=True):
     flow = flow if flow else {}
     table_id = UTIL.ofp_table_from_user(
         flow.get('table_id', dp.ofproto.OFPTT_ALL))
-    flags = int(flow.get('flags', 0))
+    flags = str_to_int(flow.get('flags', 0))
     out_port = UTIL.ofp_port_from_user(
         flow.get('out_port', dp.ofproto.OFPP_ANY))
     out_group = UTIL.ofp_group_from_user(
         flow.get('out_group', dp.ofproto.OFPG_ANY))
-    cookie = int(flow.get('cookie', 0))
-    cookie_mask = int(flow.get('cookie_mask', 0))
+    cookie = str_to_int(flow.get('cookie', 0))
+    cookie_mask = str_to_int(flow.get('cookie_mask', 0))
     match = to_match(dp, flow.get('match', {}))
+    # Note: OpenFlow does not allow to filter flow entries by priority,
+    # but for efficiency, ofctl provides the way to do it.
+    priority = str_to_int(flow.get('priority', -1))
 
     stats = dp.ofproto_parser.OFPFlowStatsRequest(
         dp, flags, table_id, out_port, out_group, cookie, cookie_mask,
@@ -334,6 +341,9 @@ def get_flow_stats(dp, waiters, flow=None, to_user=True):
     flows = []
     for msg in msgs:
         for stats in msg.body:
+            if 0 <= priority != stats.priority:
+                continue
+
             s = stats.to_jsondict()[stats.__class__.__name__]
             s['instructions'] = instructions_to_str(stats.instructions)
             s['match'] = match_to_str(stats.match)
@@ -346,13 +356,13 @@ def get_aggregate_flow_stats(dp, waiters, flow=None, to_user=True):
     flow = flow if flow else {}
     table_id = UTIL.ofp_table_from_user(
         flow.get('table_id', dp.ofproto.OFPTT_ALL))
-    flags = int(flow.get('flags', 0))
+    flags = str_to_int(flow.get('flags', 0))
     out_port = UTIL.ofp_port_from_user(
         flow.get('out_port', dp.ofproto.OFPP_ANY))
     out_group = UTIL.ofp_group_from_user(
         flow.get('out_group', dp.ofproto.OFPG_ANY))
-    cookie = int(flow.get('cookie', 0))
-    cookie_mask = int(flow.get('cookie_mask', 0))
+    cookie = str_to_int(flow.get('cookie', 0))
+    cookie_mask = str_to_int(flow.get('cookie_mask', 0))
     match = to_match(dp, flow.get('match', {}))
 
     stats = dp.ofproto_parser.OFPAggregateStatsRequest(
@@ -430,27 +440,27 @@ def get_table_features(dp, waiters, to_user=True):
                 p['type'] = t if t != prop.type else 'UNKNOWN'
                 if prop.type in p_type_instructions:
                     instruction_ids = []
-                    for id in prop.instruction_ids:
-                        i = {'len': id.len,
-                             'type': id.type}
-                        instruction_ids.append(i)
+                    for i in prop.instruction_ids:
+                        inst = {'len': i.len,
+                                'type': i.type}
+                        instruction_ids.append(inst)
                     p['instruction_ids'] = instruction_ids
                 elif prop.type in p_type_next_tables:
                     table_ids = []
-                    for id in prop.table_ids:
-                        table_ids.append(id)
+                    for i in prop.table_ids:
+                        table_ids.append(i)
                     p['table_ids'] = table_ids
                 elif prop.type in p_type_actions:
                     action_ids = []
-                    for id in prop.action_ids:
-                        i = id.to_jsondict()[id.__class__.__name__]
-                        action_ids.append(i)
+                    for i in prop.action_ids:
+                        act = i.to_jsondict()[i.__class__.__name__]
+                        action_ids.append(act)
                     p['action_ids'] = action_ids
                 elif prop.type in p_type_oxms:
                     oxm_ids = []
-                    for id in prop.oxm_ids:
-                        i = id.to_jsondict()[id.__class__.__name__]
-                        oxm_ids.append(i)
+                    for i in prop.oxm_ids:
+                        oxm = i.to_jsondict()[i.__class__.__name__]
+                        oxm_ids.append(oxm)
                     p['oxm_ids'] = oxm_ids
                 elif prop.type in p_type_experimenter:
                     pass
@@ -677,8 +687,7 @@ def get_group_features(dp, waiters, to_user=True):
                    ofp.OFPAT_SET_FIELD: 'SET_FIELD',
                    ofp.OFPAT_PUSH_PBB: 'PUSH_PBB',
                    ofp.OFPAT_POP_PBB: 'POP_PBB',
-                   ofp.OFPAT_EXPERIMENTER: 'EXPERIMENTER',
-                   }
+                   ofp.OFPAT_EXPERIMENTER: 'EXPERIMENTER'}
 
     stats = dp.ofproto_parser.OFPGroupFeaturesStatsRequest(dp, 0)
     msgs = []
@@ -808,28 +817,32 @@ def get_port_desc(dp, waiters, port_no=None, to_user=True):
     return wrap_dpid_dict(dp, descs, to_user)
 
 
+def get_role(dp, waiters, to_user=True):
+    return ofctl_utils.get_role(dp, waiters, to_user)
+
+
 def mod_flow_entry(dp, flow, cmd):
-    cookie = int(flow.get('cookie', 0))
-    cookie_mask = int(flow.get('cookie_mask', 0))
+    cookie = str_to_int(flow.get('cookie', 0))
+    cookie_mask = str_to_int(flow.get('cookie_mask', 0))
     table_id = UTIL.ofp_table_from_user(flow.get('table_id', 0))
-    idle_timeout = int(flow.get('idle_timeout', 0))
-    hard_timeout = int(flow.get('hard_timeout', 0))
-    priority = int(flow.get('priority', 0))
+    idle_timeout = str_to_int(flow.get('idle_timeout', 0))
+    hard_timeout = str_to_int(flow.get('hard_timeout', 0))
+    priority = str_to_int(flow.get('priority', 0))
     buffer_id = UTIL.ofp_buffer_from_user(
         flow.get('buffer_id', dp.ofproto.OFP_NO_BUFFER))
     out_port = UTIL.ofp_port_from_user(
         flow.get('out_port', dp.ofproto.OFPP_ANY))
     out_group = UTIL.ofp_group_from_user(
         flow.get('out_group', dp.ofproto.OFPG_ANY))
-    importance = int(flow.get('importance', 0))
-    flags = int(flow.get('flags', 0))
+    importance = str_to_int(flow.get('importance', 0))
+    flags = str_to_int(flow.get('flags', 0))
     match = to_match(dp, flow.get('match', {}))
     inst = to_instructions(dp, flow.get('instructions', []))
 
     flow_mod = dp.ofproto_parser.OFPFlowMod(
         dp, cookie, cookie_mask, table_id, cmd, idle_timeout,
         hard_timeout, priority, buffer_id, out_port, out_group,
-        importance, flags, match, inst)
+        flags, importance, match, inst)
 
     ofctl_utils.send_msg(dp, flow_mod, LOG)
 
@@ -853,18 +866,18 @@ def mod_meter_entry(dp, meter, cmd):
     bands = []
     for band in meter.get('bands', []):
         band_type = band.get('type')
-        rate = int(band.get('rate', 0))
-        burst_size = int(band.get('burst_size', 0))
+        rate = str_to_int(band.get('rate', 0))
+        burst_size = str_to_int(band.get('burst_size', 0))
         if band_type == 'DROP':
             bands.append(
                 dp.ofproto_parser.OFPMeterBandDrop(rate, burst_size))
         elif band_type == 'DSCP_REMARK':
-            prec_level = int(band.get('prec_level', 0))
+            prec_level = str_to_int(band.get('prec_level', 0))
             bands.append(
                 dp.ofproto_parser.OFPMeterBandDscpRemark(
                     rate, burst_size, prec_level))
         elif band_type == 'EXPERIMENTER':
-            experimenter = int(band.get('experimenter', 0))
+            experimenter = str_to_int(band.get('experimenter', 0))
             bands.append(
                 dp.ofproto_parser.OFPMeterBandExperimenter(
                     rate, burst_size, experimenter))
@@ -888,9 +901,11 @@ def mod_group_entry(dp, group, cmd):
 
     buckets = []
     for bucket in group.get('buckets', []):
-        weight = int(bucket.get('weight', 0))
-        watch_port = int(bucket.get('watch_port', dp.ofproto.OFPP_ANY))
-        watch_group = int(bucket.get('watch_group', dp.ofproto.OFPG_ANY))
+        weight = str_to_int(bucket.get('weight', 0))
+        watch_port = str_to_int(
+            bucket.get('watch_port', dp.ofproto.OFPP_ANY))
+        watch_group = str_to_int(
+            bucket.get('watch_group', dp.ofproto.OFPG_ANY))
         actions = []
         for dic in bucket.get('actions', []):
             action = to_action(dp, dic)
@@ -910,8 +925,8 @@ def mod_port_behavior(dp, port_config):
     parser = dp.ofproto_parser
     port_no = UTIL.ofp_port_from_user(port_config.get('port_no', 0))
     hw_addr = str(port_config.get('hw_addr'))
-    config = int(port_config.get('config', 0))
-    mask = int(port_config.get('mask', 0))
+    config = str_to_int(port_config.get('config', 0))
+    mask = str_to_int(port_config.get('mask', 0))
     properties = port_config.get('properties')
 
     prop = []
@@ -939,6 +954,12 @@ def mod_port_behavior(dp, port_config):
         dp, port_no, hw_addr, config, mask, prop)
 
     ofctl_utils.send_msg(dp, port_mod, LOG)
+
+
+def set_role(dp, role):
+    r = UTIL.ofp_role_from_user(role.get('role', dp.ofproto.OFPCR_ROLE_EQUAL))
+    role_request = dp.ofproto_parser.OFPRoleRequest(dp, r, 0)
+    ofctl_utils.send_msg(dp, role_request, LOG)
 
 
 # NOTE(jkoelker) Alias common funcitons

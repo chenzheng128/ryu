@@ -14,10 +14,8 @@
 # limitations under the License.
 
 import logging
-
 import json
 import ast
-from webob import Response
 
 from ryu.base import app_manager
 from ryu.controller import ofp_event
@@ -35,8 +33,9 @@ from ryu.lib import ofctl_v1_2
 from ryu.lib import ofctl_v1_3
 from ryu.lib import ofctl_v1_4
 from ryu.lib import ofctl_v1_5
-from ryu.app.wsgi import ControllerBase, WSGIApplication
-
+from ryu.app.wsgi import ControllerBase
+from ryu.app.wsgi import Response
+from ryu.app.wsgi import WSGIApplication
 
 LOG = logging.getLogger('ryu.app.ofctl_rest')
 
@@ -176,6 +175,9 @@ supported_ofctl = {
 #
 # modify behavior of the physical port
 # POST /stats/portdesc/modify
+#
+# modify role of controller
+# POST /stats/role
 #
 #
 # send a experimeter message
@@ -414,6 +416,10 @@ class StatsController(ControllerBase):
         else:
             return ofctl.get_port_desc(dp, self.waiters, port_no)
 
+    @stats_method
+    def get_role(self, req, dp, ofctl, **kwargs):
+        return ofctl.get_role(dp, self.waiters)
+
     @command_method
     def mod_flow_entry(self, req, dp, ofctl, flow, cmd, **kwargs):
         cmd_convert = {
@@ -487,6 +493,10 @@ class StatsController(ControllerBase):
     @command_method
     def send_experimenter(self, req, dp, ofctl, exp, **kwargs):
         ofctl.send_experimenter(dp, exp)
+
+    @command_method
+    def set_role(self, req, dp, ofctl, role, **kwargs):
+        ofctl.set_role(dp, role)
 
 
 class RestStatsApi(app_manager.RyuApp):
@@ -668,6 +678,11 @@ class RestStatsApi(app_manager.RyuApp):
                        controller=StatsController, action='get_port_desc',
                        conditions=dict(method=['GET']))
 
+        uri = path + '/role/{dpid}'
+        mapper.connect('stats', uri,
+                       controller=StatsController, action='get_role',
+                       conditions=dict(method=['GET']))
+
         uri = path + '/flowentry/{cmd}'
         mapper.connect('stats', uri,
                        controller=StatsController, action='mod_flow_entry',
@@ -696,6 +711,11 @@ class RestStatsApi(app_manager.RyuApp):
         uri = path + '/experimenter/{dpid}'
         mapper.connect('stats', uri,
                        controller=StatsController, action='send_experimenter',
+                       conditions=dict(method=['POST']))
+
+        uri = path + '/role'
+        mapper.connect('stats', uri,
+                       controller=StatsController, action='set_role',
                        conditions=dict(method=['POST']))
 
     @set_ev_cls([ofp_event.EventOFPStatsReply,
@@ -740,7 +760,9 @@ class RestStatsApi(app_manager.RyuApp):
         lock.set()
 
     @set_ev_cls([ofp_event.EventOFPSwitchFeatures,
-                 ofp_event.EventOFPQueueGetConfigReply], MAIN_DISPATCHER)
+                 ofp_event.EventOFPQueueGetConfigReply,
+                 ofp_event.EventOFPRoleReply,
+                 ], MAIN_DISPATCHER)
     def features_reply_handler(self, ev):
         msg = ev.msg
         dp = msg.datapath

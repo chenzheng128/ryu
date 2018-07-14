@@ -20,9 +20,9 @@ import socket
 import struct
 
 import json
-from webob import Response
 
 from ryu.app.wsgi import ControllerBase
+from ryu.app.wsgi import Response
 from ryu.app.wsgi import WSGIApplication
 from ryu.base import app_manager
 from ryu.controller import dpset
@@ -40,6 +40,7 @@ from ryu.lib.packet import ethernet
 from ryu.lib.packet import icmp
 from ryu.lib.packet import ipv4
 from ryu.lib.packet import packet
+from ryu.lib.packet import packet_base
 from ryu.lib.packet import tcp
 from ryu.lib.packet import udp
 from ryu.lib.packet import vlan
@@ -569,7 +570,8 @@ class Router(dict):
         # TODO: Packet library convert to string
         # self.logger.debug('Packet in = %s', str(pkt), self.sw_id)
         header_list = dict((p.protocol_name, p)
-                           for p in pkt.protocols if type(p) != str)
+                           for p in pkt.protocols
+                           if isinstance(p, packet_base.PacketBase))
         if header_list:
             # Check vlan-tag
             vlan_id = VLANID_NONE
@@ -1008,14 +1010,14 @@ class VlanRouter(object):
         else:
             if header_list[ARP].opcode == arp.ARP_REQUEST:
                 # ARP request to router port -> send ARP reply
-                src_mac = header_list[ARP].src_mac
-                dst_mac = self.port_data[in_port].mac
+                src_mac = self.port_data[in_port].mac
+                dst_mac = header_list[ARP].src_mac
                 arp_target_mac = dst_mac
                 output = in_port
                 in_port = self.ofctl.dp.ofproto.OFPP_CONTROLLER
 
                 self.ofctl.send_arp(arp.ARP_REPLY, self.vlan_id,
-                                    dst_mac, src_mac, dst_ip, src_ip,
+                                    src_mac, dst_mac, dst_ip, src_ip,
                                     arp_target_mac, in_port, output)
 
                 log_msg = 'Receive ARP request from [%s] to router port [%s].'

@@ -13,13 +13,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import six
 import struct
 import logging
 
+import six
+
+from ryu.lib import stringify
 from . import packet_base
 from . import packet_utils
-from ryu.lib import stringify
+from . import bgp
+from . import openflow
+from . import zebra
 
 
 LOG = logging.getLogger(__name__)
@@ -108,6 +112,21 @@ class tcp(packet_base.PacketBase):
         mask = sum(flags)
         return (self.bits & mask) == mask
 
+    @staticmethod
+    def get_payload_type(src_port, dst_port):
+        from ryu.ofproto.ofproto_common import OFP_TCP_PORT, OFP_SSL_PORT_OLD
+        if bgp.TCP_SERVER_PORT in [src_port, dst_port]:
+            return bgp.BGPMessage
+        elif(src_port in [OFP_TCP_PORT, OFP_SSL_PORT_OLD] or
+             dst_port in [OFP_TCP_PORT, OFP_SSL_PORT_OLD]):
+            return openflow.openflow
+        elif src_port == zebra.ZEBRA_PORT:
+            return zebra._ZebraMessageFromZebra
+        elif dst_port == zebra.ZEBRA_PORT:
+            return zebra.ZebraMessage
+        else:
+            return None
+
     @classmethod
     def parser(cls, buf):
         (src_port, dst_port, seq, ack, offset, bits, window_size,
@@ -132,7 +151,7 @@ class tcp(packet_base.PacketBase):
         msg = cls(src_port, dst_port, seq, ack, offset, bits,
                   window_size, csum, urgent, option)
 
-        return msg, None, buf[length:]
+        return msg, cls.get_payload_type(src_port, dst_port), buf[length:]
 
     def serialize(self, payload, prev):
         offset = self.offset << 4
@@ -158,7 +177,7 @@ class tcp(packet_base.PacketBase):
                 if len(h) < offset:
                     h.extend(bytearray(offset - len(h)))
 
-        if 0 == self.offset:
+        if self.offset == 0:
             self.offset = len(h) >> 2
             offset = self.offset << 4
             struct.pack_into('!B', h, 12, offset)

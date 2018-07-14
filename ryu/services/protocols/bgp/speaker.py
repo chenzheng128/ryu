@@ -24,6 +24,7 @@ from socket import IPPROTO_TCP, TCP_NODELAY
 from eventlet import semaphore
 
 from ryu.lib.packet import bgp
+from ryu.lib.packet.bgp import AS_TRANS
 from ryu.lib.packet.bgp import BGPMessage
 from ryu.lib.packet.bgp import BGPOpen
 from ryu.lib.packet.bgp import BGPUpdate
@@ -34,6 +35,7 @@ from ryu.lib.packet.bgp import BGP_MSG_UPDATE
 from ryu.lib.packet.bgp import BGP_MSG_KEEPALIVE
 from ryu.lib.packet.bgp import BGP_MSG_NOTIFICATION
 from ryu.lib.packet.bgp import BGP_MSG_ROUTE_REFRESH
+from ryu.lib.packet.bgp import BGP_CAP_FOUR_OCTET_AS_NUMBER
 from ryu.lib.packet.bgp import BGP_CAP_ENHANCED_ROUTE_REFRESH
 from ryu.lib.packet.bgp import BGP_CAP_MULTIPROTOCOL
 from ryu.lib.packet.bgp import BGP_ERROR_HOLD_TIMER_EXPIRED
@@ -49,7 +51,6 @@ from ryu.services.protocols.bgp.constants import BGP_FSM_OPEN_CONFIRM
 from ryu.services.protocols.bgp.constants import BGP_FSM_OPEN_SENT
 from ryu.services.protocols.bgp.constants import BGP_VERSION_NUM
 from ryu.services.protocols.bgp.protocol import Protocol
-from ryu.services.protocols.bgp.utils.validation import is_valid_old_asn
 
 LOG = logging.getLogger('bgpspeaker.speaker')
 
@@ -69,7 +70,7 @@ class BgpProtocolException(BGPSException):
     pass
 
 
-def nofitication_factory(code, subcode):
+def notification_factory(code, subcode):
     """Returns a `Notification` message corresponding to given codes.
 
     Parameters:
@@ -99,9 +100,9 @@ class BgpProtocol(Protocol, Activity):
                                                      self._remotename,
                                                      self._localname))
         Activity.__init__(self, name=activity_name)
-        # Intialize instance variables.
+        # Initialize instance variables.
         self._peer = None
-        self._recv_buff = ''
+        self._recv_buff = b''
         self._socket = socket
         self._socket.setsockopt(IPPROTO_TCP, TCP_NODELAY, 1)
         self._sendlock = semaphore.Semaphore()
@@ -120,6 +121,7 @@ class BgpProtocol(Protocol, Activity):
         self.sent_open_msg = None
         self.recv_open_msg = None
         self._is_bound = False
+        self.cap_four_octet_as_number = False
 
     @property
     def is_reactive(self):
@@ -247,11 +249,17 @@ class BgpProtocol(Protocol, Activity):
         return afs
 
     def is_mbgp_cap_valid(self, route_family):
-        """Returns true if both sides of this protocol have advertise
+        """Returns True if both sides of this protocol have advertise
         capability for this address family.
         """
         return (self.is_route_family_adv(route_family) and
                 self.is_route_family_adv_recv(route_family))
+
+    def is_four_octet_as_number_cap_valid(self):
+        """Returns True if both sides of this protocol have Four-Octet
+        AS number capability."""
+        return (self.cap_four_octet_as_number and
+                self._peer.cap_four_octet_as_number)
 
     def _run(self, peer):
         """Sends open message to peer and handles received messages.
@@ -342,7 +350,7 @@ class BgpProtocol(Protocol, Activity):
             # If we have partial message we wait for rest of the message.
             if len(self._recv_buff) < length:
                 return
-            msg, rest = BGPMessage.parser(self._recv_buff)
+            msg, _, rest = BGPMessage.parser(self._recv_buff)
             self._recv_buff = rest
 
             # If we have a valid bgp message we call message handler.
@@ -405,11 +413,26 @@ class BgpProtocol(Protocol, Activity):
         either one of them we have to end session.
         """
         assert open_msg.type == BGP_MSG_OPEN
-        # Validate remote ASN.
-        remote_asnum = open_msg.my_as
-        # Since 4byte AS is not yet supported, we validate AS as old style AS.
-        if (not is_valid_old_asn(remote_asnum) or
-                remote_asnum != self._peer.remote_as):
+
+        opt_param_cap_map = open_msg.opt_param_cap_map
+
+        # Validate remote AS number.
+        remote_as = open_msg.my_as
+        # Try to get AS number from Four-Octet AS number capability.
+        cap4as = opt_param_cap_map.get(BGP_CAP_FOUR_OCTET_AS_NUMBER, None)
+        if cap4as is None:
+            if remote_as == AS_TRANS:
+                # Raise Bad Peer AS error message, if my_as is AS_TRANS
+                # and without Four-Octet AS number capability.
+                raise bgp.BadPeerAs()
+            self.cap_four_octet_as_number = False
+        else:
+            # Note: Even if the peer has Four-Octet AS number capability,
+            # keep the local capability setting
+            remote_as = cap4as.as_number
+            self.cap_four_octet_as_number = True
+        #  Validate remote AS number with local setting.
+        if remote_as != self._peer.remote_as:
             raise bgp.BadPeerAs()
 
         # Validate bgp version number.
@@ -426,7 +449,7 @@ class BgpProtocol(Protocol, Activity):
         LOG.debug('Received msg from %s << %s', self._remotename, msg)
 
         # If we receive open message we try to bind to protocol
-        if (msg.type == BGP_MSG_OPEN):
+        if msg.type == BGP_MSG_OPEN:
             if self.state == BGP_FSM_OPEN_SENT:
                 # Validate open message.
                 self._validate_open_msg(msg)
@@ -550,7 +573,7 @@ class BgpProtocol(Protocol, Activity):
     def connection_made(self):
         """Connection to peer handler.
 
-        We send bgp open message to peer and intialize related attributes.
+        We send bgp open message to peer and initialize related attributes.
         """
         assert self.state == BGP_FSM_CONNECT
         # We have a connection with peer we send open message.
